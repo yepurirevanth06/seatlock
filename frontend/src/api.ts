@@ -34,7 +34,14 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   }
 
   const text = await response.text();
-  const body = text ? JSON.parse(text) : undefined;
+  let body: any = undefined;
+  if (text) {
+    try {
+      body = JSON.parse(text);
+    } catch {
+      body = { message: text };
+    }
+  }
 
   if (!response.ok) {
     if (response.status === 401) tokenStore.clear();

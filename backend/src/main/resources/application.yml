@@ -26,7 +26,7 @@ app:
     ttl-seconds: ${HOLD_TTL_SECONDS:300}
     max-seats: 6
   seed-demo-data: ${SEED_DEMO_DATA:true}
-  cors-origins: ${CORS_ORIGINS:http://localhost:5173}
+    cors-origins: ${CORS_ORIGINS:http://localhost:*}
 
 management:
   endpoints:
