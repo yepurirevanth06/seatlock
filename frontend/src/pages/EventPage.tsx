@@ -1,14 +1,16 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { api, ApiError } from '../api';
 import { useAuth } from '../auth';
 import HoldTimer from '../components/HoldTimer';
 import SeatMap from '../components/SeatMap';
 import { formatDate, formatPrice, formatTime, seatLabel } from '../format';
+import { subscribeToSeats, type SeatUpdate } from '../realtime';
 import type { Booking, EventSummary, SeatMap as SeatMapData, SeatView } from '../types';
 
-// Phase 2 replaces polling with WebSocket pushes.
-const POLL_MS = 3000;
+// Seat changes arrive instantly over WebSocket. This slow refresh is only a safety net
+// in case a message is missed while the connection is reconnecting.
+const RESYNC_MS = 30000;
 
 type Message = { kind: 'error' | 'info'; text: string } | null;
 
@@ -26,6 +28,10 @@ export default function EventPage() {
   const [message, setMessage] = useState<Message>(null);
   const [busy, setBusy] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [live, setLive] = useState(false);
+  // Seats this browser is in the middle of holding. The server's broadcast can arrive
+  // before our own HTTP response, and we must not mistake our own hold for someone else's.
+  const holdingNow = useRef<Set<number>>(new Set());
 
   const refresh = useCallback(async () => {
     try {
@@ -38,9 +44,38 @@ export default function EventPage() {
   useEffect(() => {
     api.event(eventId).then(setEvent).catch((e: ApiError) => setLoadError(e.message));
     refresh();
-    const id = window.setInterval(refresh, POLL_MS);
+    const id = window.setInterval(refresh, RESYNC_MS);
     return () => window.clearInterval(id);
   }, [eventId, refresh, user]);
+
+  // Apply pushed changes directly to the map, keeping our own holds marked as ours.
+  const applyUpdate = useCallback((update: SeatUpdate) => {
+    const changed = new Map(update.changes.map((c) => [c.seatId, c.status]));
+    setMap((current) => {
+      if (!current) return current;
+      return {
+        ...current,
+        rows: current.rows.map((row) => ({
+          ...row,
+          seats: row.seats.map((seat) => {
+            const next = changed.get(seat.id);
+            if (!next) return seat;
+            const mine = seat.status === 'HELD_BY_YOU' || holdingNow.current.has(seat.id);
+            return { ...seat, status: next === 'HELD' && mine ? 'HELD_BY_YOU' : next };
+          }),
+        })),
+      };
+    });
+  }, []);
+
+  useEffect(
+    () =>
+      subscribeToSeats(eventId, applyUpdate, (connected) => {
+        setLive(connected);
+        if (connected) refresh(); // catch up on anything missed while disconnected
+      }),
+    [eventId, applyUpdate, refresh],
+  );
 
   const seatsById = useMemo(() => {
     const m = new Map<number, SeatView>();
@@ -106,9 +141,14 @@ export default function EventPage() {
 
   const holdSelected = () =>
     run(async () => {
-      const res = await api.hold(eventId, selected);
-      setExpiresAt(res.expiresAt);
-      setSelected([]);
+      holdingNow.current = new Set(selected);
+      try {
+        const res = await api.hold(eventId, selected);
+        setExpiresAt(res.expiresAt);
+        setSelected([]);
+      } finally {
+        holdingNow.current = new Set();
+      }
     });
 
   const bookHeld = () =>
@@ -146,6 +186,10 @@ export default function EventPage() {
         <h1>{event.name}</h1>
         <p className="muted">
           {event.venue}, {formatDate(event.startsAt)} at {formatTime(event.startsAt)}
+        </p>
+        <p className={live ? 'live live-on' : 'live'} role="status">
+          <span className="live-dot" aria-hidden="true" />
+          {live ? 'Seats update live' : 'Reconnecting to live updates'}
         </p>
         <SeatMap
           rows={map.rows}

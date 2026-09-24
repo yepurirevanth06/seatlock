@@ -9,6 +9,7 @@ import com.seatlock.event.EventDtos.SeatMapResponse;
 import com.seatlock.event.EventDtos.SeatSelection;
 import com.seatlock.hold.SeatHoldService;
 import com.seatlock.hold.SeatHoldService.HoldResult;
+import com.seatlock.realtime.SeatBroadcaster;
 import jakarta.validation.Valid;
 import java.util.List;
 import org.springframework.http.HttpStatus;
@@ -27,10 +28,12 @@ public class EventController {
 
     private final EventService eventService;
     private final SeatHoldService holdService;
+    private final SeatBroadcaster broadcaster;
 
-    public EventController(EventService eventService, SeatHoldService holdService) {
+    public EventController(EventService eventService, SeatHoldService holdService, SeatBroadcaster broadcaster) {
         this.eventService = eventService;
         this.holdService = holdService;
+        this.broadcaster = broadcaster;
     }
 
     @GetMapping
@@ -61,12 +64,15 @@ public class EventController {
                              @AuthenticationPrincipal AuthUser user) {
         eventService.require(id);
         HoldResult result = holdService.hold(id, body.seatIds(), user.id());
+        broadcaster.seatsChanged(id, result.seatIds());
         return new HoldResponse(result.seatIds(), result.expiresAt());
     }
 
     @PostMapping("/{id}/holds/release")
     public ReleaseResponse release(@PathVariable("id") Long id, @Valid @RequestBody SeatSelection body,
                                    @AuthenticationPrincipal AuthUser user) {
-        return new ReleaseResponse(holdService.release(id, body.seatIds(), user.id()));
+        int released = holdService.release(id, body.seatIds(), user.id());
+        broadcaster.seatsChanged(id, holdService.normalize(body.seatIds()));
+        return new ReleaseResponse(released);
     }
 }

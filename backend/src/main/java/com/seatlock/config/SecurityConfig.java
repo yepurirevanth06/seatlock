@@ -32,6 +32,7 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.POST, "/api/auth/register", "/api/auth/login").permitAll()
                         .requestMatchers("/actuator/health/**").permitAll()
+                        .requestMatchers("/ws/**").permitAll() // read-only seat broadcasts, no personal data
                         .requestMatchers(HttpMethod.GET, "/api/events", "/api/events/*", "/api/events/*/seats").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/events").hasRole("ADMIN")
                         .anyRequest().authenticated())

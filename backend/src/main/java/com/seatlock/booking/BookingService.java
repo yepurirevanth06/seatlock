@@ -8,6 +8,7 @@ import com.seatlock.common.SeatConflictException;
 import com.seatlock.event.Event;
 import com.seatlock.event.EventRepository;
 import com.seatlock.hold.SeatHoldService;
+import com.seatlock.realtime.SeatBroadcaster;
 import com.seatlock.seat.Seat;
 import com.seatlock.seat.SeatRepository;
 import java.util.List;
@@ -33,14 +34,16 @@ public class BookingService {
     private final BookingRepository bookings;
     private final SeatRepository seats;
     private final EventRepository events;
+    private final SeatBroadcaster broadcaster;
 
     public BookingService(SeatHoldService holds, BookingWriter writer, BookingRepository bookings,
-                          SeatRepository seats, EventRepository events) {
+                          SeatRepository seats, EventRepository events, SeatBroadcaster broadcaster) {
         this.holds = holds;
         this.writer = writer;
         this.bookings = bookings;
         this.seats = seats;
         this.events = events;
+        this.broadcaster = broadcaster;
     }
 
     public BookingResponse confirm(Long userId, Long eventId, List<Long> requestedSeatIds) {
@@ -62,6 +65,9 @@ public class BookingService {
             // Not fatal: the seats are BOOKED in Postgres, which always wins, and the keys expire anyway.
             log.warn("Could not release holds for booking {}: {}", result.booking().getId(), e.getMessage());
         }
+
+        // Only after the transaction has committed, so viewers never see a booking that rolled back.
+        broadcaster.seatsChanged(eventId, seatIds);
 
         return toResponse(result.booking(), event, result.seats());
     }

@@ -350,6 +350,29 @@ code {
   margin: 0;
 }
 
+/* Live connection indicator */
+
+.live {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--ink-soft);
+}
+
+.live-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--slate);
+}
+
+.live-on .live-dot {
+  background: var(--pine);
+  box-shadow: 0 0 0 3px var(--pine-tint);
+}
+
 /* Hold timer: a bar that drains as the Redis hold runs down */
 
 .timer {
