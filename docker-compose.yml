@@ -23,6 +23,22 @@ services:
       interval: 5s
       retries: 10
 
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    ports:
+      - "5672:5672"     # AMQP, used by the app
+      - "15672:15672"   # management UI: http://localhost:15672 (guest / guest)
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      retries: 10
+
+  mailpit:
+    image: axllent/mailpit:latest
+    ports:
+      - "1025:1025"     # SMTP, used by the app
+      - "8025:8025"     # inbox UI: http://localhost:8025
+
   backend:
     build: ./backend
     environment:
@@ -30,6 +46,8 @@ services:
       DB_USER: seatlock
       DB_PASSWORD: seatlock
       REDIS_HOST: redis
+      RABBITMQ_HOST: rabbitmq
+      MAIL_HOST: mailpit
       JWT_SECRET: ${JWT_SECRET:-local-compose-secret-change-me-0123456789}
       CORS_ORIGINS: http://localhost:3000
     ports:
@@ -39,6 +57,10 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      mailpit:
+        condition: service_started
 
   frontend:
     build: ./frontend

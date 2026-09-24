@@ -32,6 +32,8 @@ export default function EventPage() {
   // Seats this browser is in the middle of holding. The server's broadcast can arrive
   // before our own HTTP response, and we must not mistake our own hold for someone else's.
   const holdingNow = useRef<Set<number>>(new Set());
+  // One key per checkout attempt, reused if the booking request has to be retried.
+  const checkoutKey = useRef<string | null>(null);
 
   const refresh = useCallback(async () => {
     try {
@@ -146,6 +148,7 @@ export default function EventPage() {
         const res = await api.hold(eventId, selected);
         setExpiresAt(res.expiresAt);
         setSelected([]);
+        checkoutKey.current = crypto.randomUUID();
       } finally {
         holdingNow.current = new Set();
       }
@@ -153,9 +156,20 @@ export default function EventPage() {
 
   const bookHeld = () =>
     run(async () => {
-      const result = await api.book(eventId, held.map((s) => s.id));
+      const key = checkoutKey.current ?? (checkoutKey.current = crypto.randomUUID());
+      const seatIds = held.map((s) => s.id);
+      let result: Booking;
+      try {
+        result = await api.book(eventId, seatIds, key);
+      } catch (e) {
+        // Network dropped before we heard back. The booking may or may not have gone through,
+        // so retry with the SAME key: the server returns the original booking if it exists.
+        if ((e as ApiError).status !== 0) throw e;
+        result = await api.book(eventId, seatIds, key);
+      }
       setBooking(result);
       setExpiresAt(null);
+      checkoutKey.current = null;
     });
 
   const releaseHeld = () =>
@@ -207,6 +221,7 @@ export default function EventPage() {
             <p className="muted">
               {formatPrice(booking.totalCents)}, booking #{booking.id}
             </p>
+            <p className="fine-print">A confirmation email is on its way.</p>
             <Link to="/bookings" className="button button-primary">
               See my bookings
             </Link>

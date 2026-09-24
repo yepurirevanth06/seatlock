@@ -40,7 +40,7 @@ import org.springframework.web.socket.messaging.WebSocketStompClient;
  */
 @SpringBootTest(
         webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-        properties = {"app.seed-demo-data=false", "app.holds.ttl-seconds=2"})
+        properties = {"app.seed-demo-data=false", "app.holds.ttl-seconds=2", "app.outbox-poll-ms=200"})
 class RealtimeSeatUpdatesTest extends IntegrationTestBase {
 
     @LocalServerPort int port;

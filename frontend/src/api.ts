@@ -70,6 +70,13 @@ export const api = {
   release: (eventId: number, seatIds: number[]) =>
     post<{ released: number }>(`/events/${eventId}/holds/release`, { seatIds }),
 
-  book: (eventId: number, seatIds: number[]) => post<Booking>('/bookings', { eventId, seatIds }),
+  // The same key must be sent on every retry of one checkout, so a retry returns the
+  // original booking instead of failing or booking twice.
+  book: (eventId: number, seatIds: number[], idempotencyKey: string) =>
+    request<Booking>('/bookings', {
+      method: 'POST',
+      body: JSON.stringify({ eventId, seatIds }),
+      headers: { 'Idempotency-Key': idempotencyKey },
+    }),
   myBookings: () => request<Booking[]>('/bookings/me'),
 };
