@@ -43,6 +43,10 @@ public class TestData {
         return created;
     }
 
+    public Long eventIdOfSeat(Long seatId) {
+        return seats.findById(seatId).orElseThrow().getEventId();
+    }
+
     /** Creates an event and returns its seats ordered by row then number. */
     public List<Seat> eventWithSeats(int rows, int seatsPerRow, int priceCents) {
         User admin = user(Role.ADMIN);
